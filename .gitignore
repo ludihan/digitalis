@@ -1,0 +1,12 @@
+*.db
+*.sqlite3
+*.sqlite
+/digitalis
+/out
+.env*
+/result
+
+
+# Added by cargo
+
+/target
