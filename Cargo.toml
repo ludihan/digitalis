@@ -3,4 +3,34 @@ name = "digitalis"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "music-server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "music-client"
+path = "src/bin/client.rs"
+
 [dependencies]
+# Server dependencies
+tokio = { version = "1.40", features = ["full"] }
+axum = "0.7"
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+walkdir = "2"
+rodio = "0.20"
+
+
+# Client dependencies
+ratatui = "0.29"
+crossterm = "0.28"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+urlencoding = "2.1"
+
+# Shared dependencies
+clap = { version = "4.5", features = ["derive"] }
+dirs = "5.0"

@@ -36,6 +36,8 @@
             mkShell {
               buildInputs = [
                 rust-bin.stable.latest.default
+                pkg-config
+                alsa-lib
               ];
 
               shellHook = ''
