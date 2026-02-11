@@ -32,13 +32,7 @@ struct App {
     server: SocketAddr,
     library: Option<Library>,
     playback_status: PlaybackStatus,
-
-    tracks: Vec<Track>,
-
     selected_track: usize,
-
-    active_panel: Panel,
-
     loading: bool,
     error_message: Option<String>,
     last_update: Instant,
@@ -55,9 +49,7 @@ impl App {
             server,
             library: None,
             playback_status: PlaybackStatus::default(),
-            tracks: Vec::new(),
             selected_track: 0,
-            active_panel: Panel::Tracks,
             loading: true,
             error_message: None,
             last_update: Instant::now(),
@@ -120,21 +112,19 @@ impl App {
     }
 
     fn next_item(&mut self) {
-        match self.active_panel {
-            Panel::Tracks => {
-                if !self.tracks.is_empty() {
-                    self.selected_track = (self.selected_track + 1) % self.tracks.len();
-                }
+        if let Some(ref library) = self.library {
+            let tracks = &library.tracks;
+            if !tracks.is_empty() {
+                self.selected_track = (self.selected_track + 1) % tracks.len();
             }
         }
     }
 
     fn prev_item(&mut self) {
-        match self.active_panel {
-            Panel::Tracks => {
-                if !self.tracks.is_empty() {
-                    self.selected_track = self.selected_track.saturating_sub(1);
-                }
+        if let Some(ref library) = self.library {
+            let tracks = &library.tracks;
+            if !tracks.is_empty() {
+                self.selected_track = self.selected_track.saturating_sub(1);
             }
         }
     }
@@ -143,7 +133,6 @@ impl App {
 fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .margin(1)
         .constraints([
             Constraint::Length(3),
             Constraint::Min(10),
@@ -162,48 +151,33 @@ fn draw(f: &mut Frame, app: &App) {
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(header, chunks[0]);
 
-    // Browser area
-    let browser_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(33),
-            Constraint::Percentage(33),
-            Constraint::Percentage(34),
-        ])
-        .split(chunks[1]);
-
     // Tracks list
-    let tracks_items: Vec<ListItem> = app
-        .tracks
-        .iter()
-        .enumerate()
-        .map(|(i, track)| {
-            let style = if i == app.selected_track {
-                if app.active_panel == Panel::Tracks {
+    let tracks_items: Vec<ListItem> = match app.library {
+        None => Vec::new(),
+        Some(ref library) => library
+            .tracks
+            .iter()
+            .enumerate()
+            .map(|(i, track)| {
+                let style = if i == app.selected_track {
                     Style::default().bg(Color::Blue).fg(Color::White)
                 } else {
-                    Style::default().bg(Color::DarkGray).fg(Color::White)
-                }
-            } else {
-                Style::default()
-            };
-            ListItem::new(track.title.as_str()).style(style)
-        })
-        .collect();
+                    Style::default()
+                };
+                ListItem::new(track.title.as_str()).style(style)
+            })
+            .collect(),
+    };
 
     let tracks_list = List::new(tracks_items)
         .block(
             Block::default()
                 .title("Tracks")
                 .borders(Borders::ALL)
-                .border_style(if app.active_panel == Panel::Tracks {
-                    Style::default().fg(Color::Yellow)
-                } else {
-                    Style::default()
-                }),
+                .border_style(Style::default().fg(Color::Yellow)),
         )
         .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-    f.render_widget(tracks_list, browser_chunks[2]);
+    f.render_widget(tracks_list, chunks[1]);
 
     // Now playing area
     let now_playing_chunks = Layout::default()
@@ -347,7 +321,7 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
-                        KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(()),
+                        KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => return Ok(()),
                         KeyCode::Down => app.next_item(),
                         KeyCode::Up => app.prev_item(),
                         KeyCode::Enter => {}
