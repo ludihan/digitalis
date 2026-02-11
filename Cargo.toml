@@ -2,7 +2,7 @@
 name = "digitalis"
 version = "0.1.0"
 edition = "2024"
-default-run = "server"
+default-run = "digitalis-server"
 
 [dependencies]
 # Server dependencies
@@ -21,7 +21,10 @@ rodio = "0.20"
 # Client dependencies
 ratatui = "0.29"
 crossterm = "0.28"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
 urlencoding = "2.1"
 
 # Shared dependencies

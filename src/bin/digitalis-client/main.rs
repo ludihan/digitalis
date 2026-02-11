@@ -14,21 +14,20 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::{
-    io,
-    time::{Duration, Instant},
+    io, net::SocketAddr, time::{Duration, Instant}
 };
 
 #[derive(Parser, Debug)]
-#[command(name = "music-client")]
+#[command(name = "digitalis-client")]
 #[command(about = "Music player TUI client")]
 struct Args {
-    #[arg(short, long, default_value = "http://localhost:3000")]
-    server: String,
+    #[arg(short, long, default_value = "127.0.0.1:3000")]
+    server: SocketAddr,
 }
 
 #[derive(Debug, Clone)]
 struct App {
-    server_url: String,
+    server: SocketAddr,
     library: Option<Library>,
     playback_status: PlaybackStatus,
 
@@ -55,9 +54,9 @@ enum Panel {
 }
 
 impl App {
-    fn new(server_url: String) -> Self {
+    fn new(server: SocketAddr) -> Self {
         Self {
-            server_url,
+            server,
             library: None,
             playback_status: PlaybackStatus::default(),
             artists: Vec::new(),
@@ -74,7 +73,7 @@ impl App {
     }
 
     async fn fetch_library(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/library", self.server_url);
+        let url = format!("{}/api/library", self.server);
         let library = client.get(&url).send().await?.json::<Library>().await?;
         self.library = Some(library);
         self.fetch_artists(client).await?;
@@ -82,7 +81,7 @@ impl App {
     }
 
     async fn fetch_artists(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/library/artists", self.server_url);
+        let url = format!("{}/api/library/artists", self.server);
         self.artists = client.get(&url).send().await?.json::<Vec<String>>().await?;
         if !self.artists.is_empty() {
             self.fetch_albums(client).await?;
@@ -97,7 +96,7 @@ impl App {
         let artist = &self.artists[self.selected_artist];
         let url = format!(
             "{}/api/library/artists/{}/albums",
-            self.server_url,
+            self.server,
             urlencoding::encode(artist)
         );
         self.albums = client.get(&url).send().await?.json::<Vec<String>>().await?;
@@ -115,7 +114,7 @@ impl App {
         let album = &self.albums[self.selected_album];
         let url = format!(
             "{}/api/library/artists/{}/{}",
-            self.server_url,
+            self.server,
             urlencoding::encode(artist),
             urlencoding::encode(album)
         );
@@ -124,7 +123,7 @@ impl App {
     }
 
     async fn fetch_status(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/status", self.server_url);
+        let url = format!("{}/api/status", self.server);
         self.playback_status = client
             .get(&url)
             .send()
@@ -135,7 +134,7 @@ impl App {
     }
 
     async fn play_track(&self, client: &reqwest::Client, track: &Track) -> anyhow::Result<()> {
-        let url = format!("{}/api/play", self.server_url);
+        let url = format!("{}/api/play", self.server);
         let request = PlayRequest {
             path: track.path.clone(),
         };
@@ -144,25 +143,25 @@ impl App {
     }
 
     async fn pause(&self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/pause", self.server_url);
+        let url = format!("{}/api/pause", self.server);
         client.post(&url).send().await?;
         Ok(())
     }
 
     async fn resume(&self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/resume", self.server_url);
+        let url = format!("{}/api/resume", self.server);
         client.post(&url).send().await?;
         Ok(())
     }
 
     async fn stop(&self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/stop", self.server_url);
+        let url = format!("{}/api/stop", self.server);
         client.post(&url).send().await?;
         Ok(())
     }
 
     async fn set_volume(&self, client: &reqwest::Client, volume: f32) -> anyhow::Result<()> {
-        let url = format!("{}/api/volume", self.server_url);
+        let url = format!("{}/api/volume", self.server);
         let request = VolumeRequest {
             volume: volume.clamp(0.0, 1.0),
         };
@@ -239,7 +238,7 @@ fn draw(f: &mut Frame, app: &App) {
         .split(f.area());
 
     // Header
-    let header = Paragraph::new(format!("Music Player - Connected to {}", app.server_url))
+    let header = Paragraph::new(format!("Music Player - Connected to {}", app.server))
         .style(
             Style::default()
                 .fg(Color::Cyan)
