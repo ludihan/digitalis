@@ -4,8 +4,6 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub path: String,
-    pub artist: String,
-    pub album: String,
     pub title: String,
 }
 
@@ -63,8 +61,6 @@ impl Track {
             return None;
         }
 
-        let artist = components[0].to_str()?.to_string();
-        let album = components[1].to_str()?.to_string();
         let filename = components[components.len() - 1].to_str()?;
         let title = filename
             .rsplit_once('.')
@@ -74,8 +70,6 @@ impl Track {
 
         Some(Track {
             path: path_str,
-            artist,
-            album,
             title,
         })
     }

@@ -1,6 +1,6 @@
 use clap::Parser;
 use digitalis::{Library, PlaybackStatus, Track};
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use rodio::Decoder;
 use routes::AudioCommand;
 use std::{
     net::SocketAddr,
@@ -23,9 +23,6 @@ struct Args {
 }
 
 struct AudioThreadState {
-    sink: Option<Sink>,
-    _stream: OutputStream,
-    _stream_handle: OutputStreamHandle,
     current_track: Option<Track>,
     start_time: Option<Instant>,
     pause_offset: Duration,
@@ -34,14 +31,7 @@ struct AudioThreadState {
 
 impl AudioThreadState {
     fn new() -> anyhow::Result<Self> {
-        let (stream, stream_handle) = OutputStream::try_default()?;
-        let sink = Sink::try_new(&stream_handle)?;
-        sink.set_volume(1.0);
-
         Ok(Self {
-            sink: Some(sink),
-            _stream: stream,
-            _stream_handle: stream_handle,
             current_track: None,
             start_time: None,
             pause_offset: Duration::ZERO,
@@ -59,24 +49,14 @@ impl AudioThreadState {
     }
 
     fn is_playing(&self) -> bool {
-        self.sink.as_ref().map(|s| !s.is_paused()).unwrap_or(false)
+        true //self.sink.as_ref().map(|s| !s.is_paused()).unwrap_or(false)
     }
 
     fn handle_command(&mut self, cmd: AudioCommand) {
         match cmd {
             AudioCommand::Play { path, track } => match std::fs::File::open(&path) {
                 Ok(file) => match Decoder::new(std::io::BufReader::new(file)) {
-                    Ok(source) => {
-                        if let Some(ref sink) = self.sink {
-                            sink.stop();
-                            sink.append(source);
-                            sink.play();
-                            self.current_track = track;
-                            self.start_time = Some(Instant::now());
-                            self.pause_offset = Duration::ZERO;
-                            info!("Started playing: {}", path.display());
-                        }
-                    }
+                    Ok(source) => {}
                     Err(e) => {
                         error!("Failed to decode audio: {}", e);
                     }
@@ -85,45 +65,13 @@ impl AudioThreadState {
                     error!("Failed to open file: {}", e);
                 }
             },
-            AudioCommand::Pause => {
-                if let Some(ref sink) = self.sink {
-                    if self.is_playing() {
-                        sink.pause();
-                        if let Some(start) = self.start_time {
-                            self.pause_offset += start.elapsed();
-                        }
-                        self.start_time = None;
-                        info!("Playback paused");
-                    }
-                }
-            }
-            AudioCommand::Resume => {
-                if let Some(ref sink) = self.sink {
-                    sink.play();
-                    self.start_time = Some(Instant::now());
-                    info!("Playback resumed");
-                }
-            }
-            AudioCommand::Stop => {
-                if let Some(ref sink) = self.sink {
-                    sink.stop();
-                    self.current_track = None;
-                    self.start_time = None;
-                    self.pause_offset = Duration::ZERO;
-                    info!("Playback stopped");
-                }
-            }
+            AudioCommand::Pause => {}
+            AudioCommand::Resume => {}
+            AudioCommand::Stop => {}
             AudioCommand::Seek(_position_ms) => {
                 warn!("Seek not yet implemented - requires rodio sink seek support");
             }
-            AudioCommand::SetVolume(vol) => {
-                if let Some(ref sink) = self.sink {
-                    let volume = vol.clamp(0.0, 1.0);
-                    sink.set_volume(volume);
-                    self.volume = volume;
-                    info!("Volume set to {}", volume);
-                }
-            }
+            AudioCommand::SetVolume(vol) => {}
             AudioCommand::GetStatus(tx) => {
                 let status = PlaybackStatus {
                     playing: self.is_playing(),
@@ -179,10 +127,7 @@ fn scan_library(music_root: &PathBuf) -> Library {
                 if ["mp3", "flac", "ogg", "wav", "m4a", "aac"].contains(&ext.as_str()) {
                     supported_count += 1;
                     if let Some(track) = Track::from_path(&path.to_path_buf(), music_root) {
-                        debug!(
-                            "Found track: {} | Path: {} | Artist: {} | Album: {}",
-                            track.title, track.path, track.artist, track.album
-                        );
+                        debug!("Found track: {} | Path: {}", track.title, track.path);
                         tracks.push(track);
                     } else {
                         debug!(
@@ -194,13 +139,6 @@ fn scan_library(music_root: &PathBuf) -> Library {
             }
         }
     }
-
-    tracks.sort_by(|a, b| {
-        a.artist
-            .cmp(&b.artist)
-            .then(a.album.cmp(&b.album))
-            .then(a.title.cmp(&b.title))
-    });
 
     info!(
         "Scanned {} files ({} supported), found {} valid tracks",

@@ -50,54 +50,6 @@ async fn get_library(State(state): State<AppState>) -> Json<Library> {
     Json(library.clone())
 }
 
-async fn get_artists(State(state): State<AppState>) -> Json<Vec<String>> {
-    debug!("GET /api/library/artists");
-    let library = state.library.read().await;
-    let mut artists: Vec<String> = library
-        .tracks
-        .iter()
-        .map(|t| t.artist.clone())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-    artists.sort();
-    Json(artists)
-}
-
-async fn get_albums(
-    Path(artist): Path<String>,
-    State(state): State<AppState>,
-) -> Json<Vec<String>> {
-    debug!("GET /api/library/artists/{}/albums", artist);
-    let library = state.library.read().await;
-    let mut albums: Vec<String> = library
-        .tracks
-        .iter()
-        .filter(|t| t.artist == artist)
-        .map(|t| t.album.clone())
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-    albums.sort();
-    Json(albums)
-}
-
-async fn get_tracks(
-    Path((artist, album)): Path<(String, String)>,
-    State(state): State<AppState>,
-) -> Json<Vec<Track>> {
-    debug!("GET /api/library/artists/{}/{}", artist, album);
-    let library = state.library.read().await;
-    let mut tracks: Vec<Track> = library
-        .tracks
-        .iter()
-        .filter(|t| t.artist == artist && t.album == album)
-        .cloned()
-        .collect();
-    tracks.sort_by(|a, b| a.title.cmp(&b.title));
-    Json(tracks)
-}
-
 async fn play(State(state): State<AppState>, Json(request): Json<PlayRequest>) -> StatusCode {
     info!("POST /api/play - request.path: {}", request.path);
     debug!("Music root: {}", state.music_root.display());
@@ -268,9 +220,6 @@ pub fn setup_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/api/library", get(get_library))
-        .route("/api/library/artists", get(get_artists))
-        .route("/api/library/artists/{artist}/albums", get(get_albums))
-        .route("/api/library/artists/{artist}/{album}", get(get_tracks))
         .route("/api/play", post(play))
         .route("/api/pause", post(pause))
         .route("/api/resume", post(resume))

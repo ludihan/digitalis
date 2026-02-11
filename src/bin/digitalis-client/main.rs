@@ -33,12 +33,8 @@ struct App {
     library: Option<Library>,
     playback_status: PlaybackStatus,
 
-    artists: Vec<String>,
-    albums: Vec<String>,
     tracks: Vec<Track>,
 
-    selected_artist: usize,
-    selected_album: usize,
     selected_track: usize,
 
     active_panel: Panel,
@@ -50,8 +46,6 @@ struct App {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Panel {
-    Artists,
-    Albums,
     Tracks,
 }
 
@@ -61,13 +55,9 @@ impl App {
             server,
             library: None,
             playback_status: PlaybackStatus::default(),
-            artists: Vec::new(),
-            albums: Vec::new(),
             tracks: Vec::new(),
-            selected_artist: 0,
-            selected_album: 0,
             selected_track: 0,
-            active_panel: Panel::Artists,
+            active_panel: Panel::Tracks,
             loading: true,
             error_message: None,
             last_update: Instant::now(),
@@ -75,57 +65,15 @@ impl App {
     }
 
     async fn fetch_library(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/library", self.server);
-        let library = client.get(&url).send().await?.json::<Library>().await?;
+        let url = format!("http://{}/api/library", self.server);
+        dbg!(&url);
+        let library = client.get(url).send().await?.json::<Library>().await?;
         self.library = Some(library);
-        self.fetch_artists(client).await?;
-        Ok(())
-    }
-
-    async fn fetch_artists(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/library/artists", self.server);
-        self.artists = client.get(&url).send().await?.json::<Vec<String>>().await?;
-        if !self.artists.is_empty() {
-            self.fetch_albums(client).await?;
-        }
-        Ok(())
-    }
-
-    async fn fetch_albums(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        if self.selected_artist >= self.artists.len() {
-            return Ok(());
-        }
-        let artist = &self.artists[self.selected_artist];
-        let url = format!(
-            "{}/api/library/artists/{}/albums",
-            self.server,
-            urlencoding::encode(artist)
-        );
-        self.albums = client.get(&url).send().await?.json::<Vec<String>>().await?;
-        if !self.albums.is_empty() {
-            self.fetch_tracks(client).await?;
-        }
-        Ok(())
-    }
-
-    async fn fetch_tracks(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        if self.selected_artist >= self.artists.len() || self.selected_album >= self.albums.len() {
-            return Ok(());
-        }
-        let artist = &self.artists[self.selected_artist];
-        let album = &self.albums[self.selected_album];
-        let url = format!(
-            "{}/api/library/artists/{}/{}",
-            self.server,
-            urlencoding::encode(artist),
-            urlencoding::encode(album)
-        );
-        self.tracks = client.get(&url).send().await?.json::<Vec<Track>>().await?;
         Ok(())
     }
 
     async fn fetch_status(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/status", self.server);
+        let url = format!("http://{}/api/status", self.server);
         self.playback_status = client
             .get(&url)
             .send()
@@ -171,34 +119,8 @@ impl App {
         Ok(())
     }
 
-    fn next_panel(&mut self) {
-        self.active_panel = match self.active_panel {
-            Panel::Artists => Panel::Albums,
-            Panel::Albums => Panel::Tracks,
-            Panel::Tracks => Panel::Tracks,
-        };
-    }
-
-    fn prev_panel(&mut self) {
-        self.active_panel = match self.active_panel {
-            Panel::Artists => Panel::Artists,
-            Panel::Albums => Panel::Artists,
-            Panel::Tracks => Panel::Albums,
-        };
-    }
-
     fn next_item(&mut self) {
         match self.active_panel {
-            Panel::Artists => {
-                if !self.artists.is_empty() {
-                    self.selected_artist = (self.selected_artist + 1) % self.artists.len();
-                }
-            }
-            Panel::Albums => {
-                if !self.albums.is_empty() {
-                    self.selected_album = (self.selected_album + 1) % self.albums.len();
-                }
-            }
             Panel::Tracks => {
                 if !self.tracks.is_empty() {
                     self.selected_track = (self.selected_track + 1) % self.tracks.len();
@@ -209,16 +131,6 @@ impl App {
 
     fn prev_item(&mut self) {
         match self.active_panel {
-            Panel::Artists => {
-                if !self.artists.is_empty() {
-                    self.selected_artist = self.selected_artist.saturating_sub(1);
-                }
-            }
-            Panel::Albums => {
-                if !self.albums.is_empty() {
-                    self.selected_album = self.selected_album.saturating_sub(1);
-                }
-            }
             Panel::Tracks => {
                 if !self.tracks.is_empty() {
                     self.selected_track = self.selected_track.saturating_sub(1);
@@ -259,72 +171,6 @@ fn draw(f: &mut Frame, app: &App) {
             Constraint::Percentage(34),
         ])
         .split(chunks[1]);
-
-    // Artists list
-    let artists_items: Vec<ListItem> = app
-        .artists
-        .iter()
-        .enumerate()
-        .map(|(i, artist)| {
-            let style = if i == app.selected_artist {
-                if app.active_panel == Panel::Artists {
-                    Style::default().bg(Color::Blue).fg(Color::White)
-                } else {
-                    Style::default().bg(Color::DarkGray).fg(Color::White)
-                }
-            } else {
-                Style::default()
-            };
-            ListItem::new(artist.as_str()).style(style)
-        })
-        .collect();
-
-    let artists_list = List::new(artists_items)
-        .block(
-            Block::default()
-                .title("Artists")
-                .borders(Borders::ALL)
-                .border_style(if app.active_panel == Panel::Artists {
-                    Style::default().fg(Color::Yellow)
-                } else {
-                    Style::default()
-                }),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-    f.render_widget(artists_list, browser_chunks[0]);
-
-    // Albums list
-    let albums_items: Vec<ListItem> = app
-        .albums
-        .iter()
-        .enumerate()
-        .map(|(i, album)| {
-            let style = if i == app.selected_album {
-                if app.active_panel == Panel::Albums {
-                    Style::default().bg(Color::Blue).fg(Color::White)
-                } else {
-                    Style::default().bg(Color::DarkGray).fg(Color::White)
-                }
-            } else {
-                Style::default()
-            };
-            ListItem::new(album.as_str()).style(style)
-        })
-        .collect();
-
-    let albums_list = List::new(albums_items)
-        .block(
-            Block::default()
-                .title("Albums")
-                .borders(Borders::ALL)
-                .border_style(if app.active_panel == Panel::Albums {
-                    Style::default().fg(Color::Yellow)
-                } else {
-                    Style::default()
-                }),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
-    f.render_widget(albums_list, browser_chunks[1]);
 
     // Tracks list
     let tracks_items: Vec<ListItem> = app
@@ -368,10 +214,10 @@ fn draw(f: &mut Frame, app: &App) {
     let mut now_playing_text = vec![];
 
     if let Some(ref track) = app.playback_status.track {
-        now_playing_text.push(Line::from(vec![
-            Span::styled("Now Playing: ", Style::default().fg(Color::Yellow)),
-            Span::raw(format!("{} - {}", track.artist, track.album)),
-        ]));
+        now_playing_text.push(Line::from(vec![Span::styled(
+            "Now Playing: ",
+            Style::default().fg(Color::Yellow),
+        )]));
         now_playing_text.push(Line::from(vec![
             Span::styled("Track: ", Style::default().fg(Color::Yellow)),
             Span::raw(&track.title),
@@ -491,7 +337,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
     let mut last_status_update = Instant::now();
 
     loop {
-        terminal.draw(|f| draw(f, &app))?;
+        terminal
+            .draw(|f| draw(f, &app))
+            .map_err(|_| io::Error::new(io::ErrorKind::AddrNotAvailable, ""))?;
 
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
 
@@ -500,27 +348,9 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                 if key.kind == KeyEventKind::Press {
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(()),
-                        KeyCode::Tab | KeyCode::Right => app.next_panel(),
-                        KeyCode::Left => app.prev_panel(),
                         KeyCode::Down => app.next_item(),
                         KeyCode::Up => app.prev_item(),
-                        KeyCode::Enter => {
-                            if app.active_panel == Panel::Artists {
-                                if let Err(e) = app.fetch_albums(&client).await {
-                                    app.error_message = Some(format!("Error: {}", e));
-                                }
-                            } else if app.active_panel == Panel::Albums {
-                                if let Err(e) = app.fetch_tracks(&client).await {
-                                    app.error_message = Some(format!("Error: {}", e));
-                                }
-                            } else if app.active_panel == Panel::Tracks {
-                                if let Some(track) = app.tracks.get(app.selected_track) {
-                                    if let Err(e) = app.play_track(&client, track).await {
-                                        app.error_message = Some(format!("Error: {}", e));
-                                    }
-                                }
-                            }
-                        }
+                        KeyCode::Enter => {}
                         KeyCode::Char(' ') => {
                             if app.playback_status.playing {
                                 if let Err(e) = app.pause(&client).await {
