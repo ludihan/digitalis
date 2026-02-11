@@ -4,14 +4,14 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use digitalis::{Library, PlayRequest, PlaybackStatus, Track, VolumeRequest};
+use digitalis::Library;
 use ratatui::{
     Frame, Terminal,
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 use std::{
     io,
@@ -31,16 +31,9 @@ struct Args {
 struct App {
     server: SocketAddr,
     library: Option<Library>,
-    playback_status: PlaybackStatus,
     selected_track: usize,
     loading: bool,
     error_message: Option<String>,
-    last_update: Instant,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Panel {
-    Tracks,
 }
 
 impl App {
@@ -48,11 +41,9 @@ impl App {
         Self {
             server,
             library: None,
-            playback_status: PlaybackStatus::default(),
             selected_track: 0,
             loading: true,
             error_message: None,
-            last_update: Instant::now(),
         }
     }
 
@@ -61,53 +52,6 @@ impl App {
         dbg!(&url);
         let library = client.get(url).send().await?.json::<Library>().await?;
         self.library = Some(library);
-        Ok(())
-    }
-
-    async fn fetch_status(&mut self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("http://{}/api/status", self.server);
-        self.playback_status = client
-            .get(&url)
-            .send()
-            .await?
-            .json::<PlaybackStatus>()
-            .await?;
-        Ok(())
-    }
-
-    async fn play_track(&self, client: &reqwest::Client, track: &Track) -> anyhow::Result<()> {
-        let url = format!("{}/api/play", self.server);
-        let request = PlayRequest {
-            path: track.path.clone(),
-        };
-        client.post(&url).json(&request).send().await?;
-        Ok(())
-    }
-
-    async fn pause(&self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/pause", self.server);
-        client.post(&url).send().await?;
-        Ok(())
-    }
-
-    async fn resume(&self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/resume", self.server);
-        client.post(&url).send().await?;
-        Ok(())
-    }
-
-    async fn stop(&self, client: &reqwest::Client) -> anyhow::Result<()> {
-        let url = format!("{}/api/stop", self.server);
-        client.post(&url).send().await?;
-        Ok(())
-    }
-
-    async fn set_volume(&self, client: &reqwest::Client, volume: f32) -> anyhow::Result<()> {
-        let url = format!("{}/api/volume", self.server);
-        let request = VolumeRequest {
-            volume: volume.clamp(0.0, 1.0),
-        };
-        client.post(&url).json(&request).send().await?;
         Ok(())
     }
 
@@ -185,66 +129,15 @@ fn draw(f: &mut Frame, app: &App) {
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(chunks[2]);
 
-    let mut now_playing_text = vec![];
-
-    if let Some(ref track) = app.playback_status.track {
-        now_playing_text.push(Line::from(vec![Span::styled(
-            "Now Playing: ",
-            Style::default().fg(Color::Yellow),
-        )]));
-        now_playing_text.push(Line::from(vec![
-            Span::styled("Track: ", Style::default().fg(Color::Yellow)),
-            Span::raw(&track.title),
-        ]));
-    } else {
-        now_playing_text.push(Line::from("Nothing playing"));
-    }
-
-    now_playing_text.push(Line::from(""));
-
-    let position_secs = app.playback_status.position_ms / 1000;
-    let position_str = format!("{:02}:{:02}", position_secs / 60, position_secs % 60);
-
-    let status_icon = if app.playback_status.playing {
-        "▶"
-    } else {
-        "⏸"
-    };
-
-    now_playing_text.push(Line::from(format!("{} {}", status_icon, position_str)));
-
-    let volume_bar = "█".repeat((app.playback_status.volume * 10.0) as usize)
-        + &"░".repeat(10 - (app.playback_status.volume * 10.0) as usize);
-    now_playing_text.push(Line::from(format!("Volume: [{}]", volume_bar)));
-
-    let now_playing = Paragraph::new(now_playing_text)
-        .block(Block::default().title("Now Playing").borders(Borders::ALL))
-        .wrap(Wrap { trim: true });
-    f.render_widget(now_playing, now_playing_chunks[0]);
-
     // Controls
     let controls_text = Text::from(vec![
         Line::from("Controls:"),
         Line::from(""),
         Line::from(vec![
-            Span::styled("Tab/← →", Style::default().fg(Color::Green)),
-            Span::raw(" Switch panel"),
-        ]),
-        Line::from(vec![
             Span::styled("↑ ↓", Style::default().fg(Color::Green)),
             Span::raw(" Navigate"),
         ]),
         Line::from(vec![
-            Span::styled("Enter", Style::default().fg(Color::Green)),
-            Span::raw(" Play track / Select"),
-        ]),
-        Line::from(vec![
-            Span::styled("Space", Style::default().fg(Color::Green)),
-            Span::raw(" Pause/Resume"),
-        ]),
-        Line::from(vec![
-            Span::styled("S", Style::default().fg(Color::Green)),
-            Span::raw(" Stop  "),
             Span::styled("Q", Style::default().fg(Color::Green)),
             Span::raw(" Quit"),
         ]),
@@ -305,10 +198,10 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
     }
     app.loading = false;
 
-    let mut last_tick = Instant::now();
+    let last_tick = Instant::now();
     let tick_rate = Duration::from_millis(250);
-    let status_update_rate = Duration::from_secs(1);
-    let mut last_status_update = Instant::now();
+    let _status_update_rate = Duration::from_secs(1);
+    let _last_status_update = Instant::now();
 
     loop {
         terminal
@@ -325,52 +218,10 @@ async fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Re
                         KeyCode::Down => app.next_item(),
                         KeyCode::Up => app.prev_item(),
                         KeyCode::Enter => {}
-                        KeyCode::Char(' ') => {
-                            if app.playback_status.playing {
-                                if let Err(e) = app.pause(&client).await {
-                                    app.error_message = Some(format!("Error: {}", e));
-                                }
-                            } else {
-                                if let Err(e) = app.resume(&client).await {
-                                    app.error_message = Some(format!("Error: {}", e));
-                                }
-                            }
-                        }
-                        KeyCode::Char('s') | KeyCode::Char('S') => {
-                            if let Err(e) = app.stop(&client).await {
-                                app.error_message = Some(format!("Error: {}", e));
-                            }
-                        }
-                        KeyCode::Char('+') | KeyCode::Char('=') => {
-                            let new_volume = (app.playback_status.volume + 0.1).min(1.0);
-                            if let Err(e) = app.set_volume(&client, new_volume).await {
-                                app.error_message = Some(format!("Error: {}", e));
-                            }
-                        }
-                        KeyCode::Char('-') => {
-                            let new_volume = (app.playback_status.volume - 0.1).max(0.0);
-                            if let Err(e) = app.set_volume(&client, new_volume).await {
-                                app.error_message = Some(format!("Error: {}", e));
-                            }
-                        }
                         _ => {}
                     }
                 }
             }
-        }
-
-        if last_tick.elapsed() >= tick_rate {
-            last_tick = Instant::now();
-        }
-
-        // Update status periodically
-        if last_status_update.elapsed() >= status_update_rate {
-            if let Err(e) = app.fetch_status(&client).await {
-                app.error_message = Some(format!("Connection error: {}", e));
-            } else {
-                app.error_message = None;
-            }
-            last_status_update = Instant::now();
         }
     }
 }

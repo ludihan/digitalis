@@ -1,14 +1,7 @@
 use clap::Parser;
-use digitalis::{Library, PlaybackStatus, Track};
-use rodio::Decoder;
-use routes::AudioCommand;
-use std::{
-    net::SocketAddr,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
-use tokio::sync::mpsc;
-use tracing::{debug, error, info, warn};
+use digitalis::{Library, Track};
+use std::{net::SocketAddr, path::PathBuf};
+use tracing::{debug, info};
 
 mod routes;
 
@@ -20,90 +13,6 @@ struct Args {
     music_dir: PathBuf,
     #[arg(short, long, default_value = "0.0.0.0:3000")]
     bind: SocketAddr,
-}
-
-struct AudioThreadState {
-    current_track: Option<Track>,
-    start_time: Option<Instant>,
-    pause_offset: Duration,
-    volume: f32,
-}
-
-impl AudioThreadState {
-    fn new() -> anyhow::Result<Self> {
-        Ok(Self {
-            current_track: None,
-            start_time: None,
-            pause_offset: Duration::ZERO,
-            volume: 1.0,
-        })
-    }
-
-    fn position(&self) -> u64 {
-        if let Some(start) = self.start_time {
-            let elapsed = start.elapsed() + self.pause_offset;
-            elapsed.as_millis() as u64
-        } else {
-            self.pause_offset.as_millis() as u64
-        }
-    }
-
-    fn is_playing(&self) -> bool {
-        true //self.sink.as_ref().map(|s| !s.is_paused()).unwrap_or(false)
-    }
-
-    fn handle_command(&mut self, cmd: AudioCommand) {
-        match cmd {
-            AudioCommand::Play { path, track } => match std::fs::File::open(&path) {
-                Ok(file) => match Decoder::new(std::io::BufReader::new(file)) {
-                    Ok(source) => {}
-                    Err(e) => {
-                        error!("Failed to decode audio: {}", e);
-                    }
-                },
-                Err(e) => {
-                    error!("Failed to open file: {}", e);
-                }
-            },
-            AudioCommand::Pause => {}
-            AudioCommand::Resume => {}
-            AudioCommand::Stop => {}
-            AudioCommand::Seek(_position_ms) => {
-                warn!("Seek not yet implemented - requires rodio sink seek support");
-            }
-            AudioCommand::SetVolume(vol) => {}
-            AudioCommand::GetStatus(tx) => {
-                let status = PlaybackStatus {
-                    playing: self.is_playing(),
-                    track: self.current_track.clone(),
-                    position_ms: self.position(),
-                    duration_ms: None,
-                    volume: self.volume,
-                };
-                let _ = tx.send(status);
-            }
-        }
-    }
-}
-
-fn spawn_audio_thread() -> anyhow::Result<mpsc::Sender<AudioCommand>> {
-    let (tx, mut rx) = mpsc::channel::<AudioCommand>(32);
-
-    std::thread::spawn(move || {
-        let mut state = match AudioThreadState::new() {
-            Ok(s) => s,
-            Err(e) => {
-                error!("Failed to initialize audio: {}", e);
-                return;
-            }
-        };
-
-        while let Some(cmd) = rx.blocking_recv() {
-            state.handle_command(cmd);
-        }
-    });
-
-    Ok(tx)
 }
 
 fn scan_library(music_root: &PathBuf) -> Library {
@@ -176,9 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
     let library = scan_library(&music_root);
 
-    let audio_tx = spawn_audio_thread()?;
-
-    let state = routes::AppState::new(library, audio_tx, music_root);
+    let state = routes::AppState::new(library, music_root);
 
     let app = routes::setup_router(state);
 
