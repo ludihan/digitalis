@@ -2,31 +2,28 @@
 name = "digitalis"
 version = "0.1.0"
 edition = "2024"
-default-run = "digitalis-server"
+default-run = "digitalis-client"
 
 [dependencies]
 # Server dependencies
-tokio = { version = "1.40", features = ["full"] }
-axum = "0.7"
-tower-http = { version = "0.6", features = ["cors", "fs"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-anyhow = "1.0"
-walkdir = "2"
-rodio = "0.20"
+tokio = { version = "1.49", features = ["full"] }
+axum = "0.8.8"
+tower-http = { version = "0.6.8", features = ["cors", "fs"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+anyhow = "1.0.101"
+walkdir = "2.5.0"
+rodio = "0.21.1"
 
 
 # Client dependencies
-ratatui = "0.29"
-crossterm = "0.28"
-reqwest = { version = "0.12", default-features = false, features = [
-    "json",
-    "rustls-tls",
-] }
-urlencoding = "2.1"
+ratatui = "0.30.0"
+crossterm = "0.29.0"
+reqwest = { version = "0.13.2", features = ["json", "blocking"] }
+urlencoding = "2.1.3"
 
 # Shared dependencies
-clap = { version = "4.5", features = ["derive"] }
-dirs = "5.0"
+clap = { version = "4.5.58", features = ["derive"] }
+dirs = "6.0"
