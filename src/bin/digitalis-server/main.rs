@@ -1,6 +1,7 @@
 use clap::Parser;
 use digitalis::{Library, PlaybackStatus, Track};
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use routes::AudioCommand;
 use std::{
     net::SocketAddr,
     path::PathBuf,
@@ -8,7 +9,6 @@ use std::{
 };
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
-use routes::AudioCommand;
 
 mod routes;
 
@@ -240,11 +240,7 @@ async fn main() -> anyhow::Result<()> {
 
     let audio_tx = spawn_audio_thread()?;
 
-    let state = routes::AppState::new(
-        library,
-        audio_tx,
-        music_root,
-    );
+    let state = routes::AppState::new(library, audio_tx, music_root);
 
     let app = routes::setup_router(state);
 

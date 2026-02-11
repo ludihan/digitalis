@@ -14,7 +14,9 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::{
-    io, net::SocketAddr, time::{Duration, Instant}
+    io,
+    net::SocketAddr,
+    time::{Duration, Instant},
 };
 
 #[derive(Parser, Debug)]

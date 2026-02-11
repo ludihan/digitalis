@@ -20,7 +20,11 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(library: Library, audio_tx: mpsc::Sender<AudioCommand>, music_root: PathBuf) -> Self {
+    pub fn new(
+        library: Library,
+        audio_tx: mpsc::Sender<AudioCommand>,
+        music_root: PathBuf,
+    ) -> Self {
         AppState {
             library: Arc::new(RwLock::new(library)),
             audio_tx,
