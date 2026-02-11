@@ -2,14 +2,7 @@
 name = "digitalis"
 version = "0.1.0"
 edition = "2024"
-
-[[bin]]
-name = "music-server"
-path = "src/bin/server.rs"
-
-[[bin]]
-name = "music-client"
-path = "src/bin/client.rs"
+default-run = "server"
 
 [dependencies]
 # Server dependencies
