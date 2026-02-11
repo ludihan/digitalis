@@ -35,9 +35,13 @@
             with pkgs;
             mkShell {
               buildInputs = [
+                rust-analyzer
                 rust-bin.stable.latest.default
                 pkg-config
                 alsa-lib
+
+                vtsls
+                nodejs
               ];
 
               shellHook = ''
