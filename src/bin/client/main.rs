@@ -4,21 +4,19 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use digitalis::{Library, PlayRequest, PlaybackStatus, SeekRequest, Track, VolumeRequest};
+use digitalis::{Library, PlayRequest, PlaybackStatus, Track, VolumeRequest};
 use ratatui::{
     Frame, Terminal,
     backend::{Backend, CrosstermBackend},
-    layout::{Alignment, Constraint, Direction, Layout, Margin, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::{
-    collections::HashMap,
     io,
     time::{Duration, Instant},
 };
-use tokio::sync::mpsc;
 
 #[derive(Parser, Debug)]
 #[command(name = "music-client")]
@@ -238,7 +236,7 @@ fn draw(f: &mut Frame, app: &App) {
             Constraint::Min(10),
             Constraint::Length(8),
         ])
-        .split(f.size());
+        .split(f.area());
 
     // Header
     let header = Paragraph::new(format!("Music Player - Connected to {}", app.server_url))
@@ -440,7 +438,7 @@ fn draw(f: &mut Frame, app: &App) {
         let error_text = Paragraph::new(error.as_str())
             .style(Style::default().fg(Color::Red))
             .block(Block::default().title("Error").borders(Borders::ALL));
-        let area = centered_rect(60, 20, f.size());
+        let area = centered_rect(60, 20, f.area());
         f.render_widget(Clear, area);
         f.render_widget(error_text, area);
     }
@@ -451,7 +449,7 @@ fn draw(f: &mut Frame, app: &App) {
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::ALL));
-        let area = centered_rect(30, 10, f.size());
+        let area = centered_rect(30, 10, f.area());
         f.render_widget(Clear, area);
         f.render_widget(loading_text, area);
     }
